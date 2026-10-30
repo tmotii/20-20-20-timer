@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>20-20-20 タイマー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: one narrow column. A ring timer sits on a cool grey ground; the 6 m ruler under it
+   turns green and takes over the card when it is time to look into the distance. */
+:root {
+  --bg: #f1f5f7;
+  --surface: #ffffff;
+  --fg: #14212b;
+  --muted: #53646f;
+  --line: #d3dde3;
+  --work: #1d5d8a;
+  --work-soft: #dcebf5;
+  --rest: #17775c;
+  --rest-soft: #d7eee4;
+  --on-accent: #ffffff;
+  --font-ui: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1519;
+    --surface: #151f25;
+    --fg: #e6eef2;
+    --muted: #98a8b2;
+    --line: #2a3942;
+    --work: #6fb3dd;
+    --work-soft: #1a2f3c;
+    --rest: #5cc9a1;
+    --rest-soft: #17302a;
+    --on-accent: #0b1317;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1519;
+  --surface: #151f25;
+  --fg: #e6eef2;
+  --muted: #98a8b2;
+  --line: #2a3942;
+  --work: #6fb3dd;
+  --work-soft: #1a2f3c;
+  --rest: #5cc9a1;
+  --rest-soft: #17302a;
+  --on-accent: #0b1317;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 15px/1.7 var(--font-ui);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 40px;
+}
+.app {
+  --accent: var(--work);
+  max-width: 520px;
+  margin: 0 auto;
+}
+.app[data-phase="break"] { --accent: var(--rest); }
+
+header h1 { margin: 0; font-size: 22px; line-height: 1.3; font-weight: 700; letter-spacing: 0.02em; }
+header p { margin: 6px 0 0; color: var(--muted); font-size: 14px; text-wrap: balance; }
+header strong { color: var(--fg); font-weight: 700; }
+
+.card {
+  margin-top: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 24px 20px 20px;
+  transition: background-color .35s ease, border-color .35s ease;
+}
+.app[data-phase="break"] .card { background: var(--rest-soft); border-color: var(--rest); }
+
+.ring-wrap { position: relative; width: min(100%, 260px); margin: 0 auto; aspect-ratio: 1; }
+.ring-wrap svg { display: block; width: 100%; height: 100%; }
+.ring-track { fill: none; stroke: var(--line); stroke-width: 10; }
+.app[data-phase="break"] .ring-track { stroke: var(--surface); }
+.ring-bar { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .25s linear, stroke .35s ease; }
+.ring-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  text-align: center;
+}
+.phase { font-size: 14px; font-weight: 700; color: var(--accent); letter-spacing: 0.04em; }
+.time {
+  font-family: var(--font-num); font-weight: 500; font-variant-numeric: tabular-nums;
+  font-size: clamp(46px, 15vw, 58px); line-height: 1.1; letter-spacing: -0.02em;
+}
+.sub { font-size: 12px; color: var(--muted); }
+
+.row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 22px; }
+.btn {
+  font: 700 15px/1 var(--font-ui);
+  padding: 14px 20px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--fg);
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-size: 16px; min-width: 150px; padding: 15px 28px; }
+.btn.primary:hover { filter: brightness(1.06); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+.hint { margin: 16px 0 0; text-align: center; color: var(--muted); font-size: 14px; min-height: 3em; text-wrap: balance; }
+.app[data-phase="break"] .hint { color: var(--fg); }
+
+.ruler { margin-top: 14px; color: var(--muted); opacity: .7; transition: opacity .35s ease; }
+.app[data-phase="break"] .ruler { opacity: 1; color: var(--fg); }
+.ruler svg { display: block; width: 100%; height: auto; }
+.ruler text { fill: currentColor; font: 500 10px var(--font-num); }
+.ruler .target { fill: var(--accent); font: 700 11px var(--font-ui); }
+.ruler-cap { margin: 4px 0 0; font-size: 12px; text-align: center; color: var(--muted); }
+
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.stat dt { font-size: 12px; color: var(--muted); }
+.stat dd { margin: 0; font: 500 22px/1.3 var(--font-num); font-variant-numeric: tabular-nums; }
+.stat dd small { font: 400 13px var(--font-ui); color: var(--muted); margin-left: 2px; }
+
+details { margin-top: 22px; border-top: 1px solid var(--line); }
+summary { cursor: pointer; font-weight: 700; padding: 14px 0; }
+.field { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.field label { flex: 1; min-width: 0; }
+.field input[type="number"] {
+  width: 88px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--fg); font: 500 16px var(--font-num); text-align: right;
+}
+.field input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
+.note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.test { margin-top: 10px; }
+.about { margin: 26px 0 0; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-bar, .card, .ruler { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<main class="app" id="app" data-phase="work">
+  <header>
+    <h1>20-20-20 タイマー</h1>
+    <p><strong>20分</strong>ごとに、<strong>20秒</strong>間、<strong>6m</strong>(20フィート)以上先を見る。</p>
+  </header>
+
+  <section class="card" aria-label="タイマー">
+    <div class="ring-wrap">
+      <svg viewBox="0 0 220 220" aria-hidden="true">
+        <circle class="ring-track" cx="110" cy="110" r="96"></circle>
+        <circle class="ring-bar" id="ringBar" cx="110" cy="110" r="96" transform="rotate(-90 110 110)" stroke-dasharray="603.19" stroke-dashoffset="0"></circle>
+      </svg>
+      <div class="ring-center">
+        <div class="phase" id="phaseLabel" role="status" aria-live="polite">待機中</div>
+        <div class="time" id="timeText" role="timer">20:00</div>
+        <div class="sub" id="subLabel">次の休憩まで</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" id="mainBtn" type="button">開始</button>
+      <button class="btn" id="altBtn" type="button">今すぐ休憩</button>
+      <button class="btn" id="resetBtn" type="button">リセット</button>
+    </div>
+    <p class="hint" id="hintText">休憩の時間になったら、お知らせします。</p>
+
+    <div class="ruler">
+      <svg viewBox="0 0 320 64" role="img" aria-label="目から6メートル以上先を見る距離の目安">
+        <g transform="translate(24 30)">
+          <path d="M-14 0 Q0 -12 14 0 Q0 12 -14 0Z" fill="none" stroke="currentColor" stroke-width="1.6"></path>
+          <circle r="4" fill="currentColor"></circle>
+        </g>
+        <line x1="48" y1="30" x2="264" y2="30" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></line>
+        <g stroke="currentColor" stroke-width="1.4">
+          <line x1="48" y1="25" x2="48" y2="35"></line>
+          <line x1="84" y1="25" x2="84" y2="35"></line>
+          <line x1="120" y1="25" x2="120" y2="35"></line>
+          <line x1="156" y1="25" x2="156" y2="35"></line>
+          <line x1="192" y1="25" x2="192" y2="35"></line>
+          <line x1="228" y1="25" x2="228" y2="35"></line>
+        </g>
+        <line x1="264" y1="30" x2="300" y2="30" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"></line>
+        <polygon points="300,24 312,30 300,36" fill="var(--accent)"></polygon>
+        <line x1="264" y1="21" x2="264" y2="39" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"></line>
+        <text x="48" y="54" text-anchor="middle">0</text>
+        <text x="84" y="54" text-anchor="middle">1</text>
+        <text x="120" y="54" text-anchor="middle">2</text>
+        <text x="156" y="54" text-anchor="middle">3</text>
+        <text x="192" y="54" text-anchor="middle">4</text>
+        <text x="228" y="54" text-anchor="middle">5</text>
+        <text x="264" y="54" text-anchor="middle">6 m</text>
+        <text class="target" x="288" y="16" text-anchor="middle">6m以上</text>
+      </svg>
+      <p class="ruler-cap">窓の外や、部屋の反対側の壁など。</p>
+    </div>
+
+    <dl class="stats">
+      <div class="stat"><dt>今日の休憩</dt><dd><span id="statCount">0</span><small>回</small></dd></div>
+      <div class="stat"><dt>目を休めた時間</dt><dd id="statTime">0<small>秒</small></dd></div>
+    </dl>
+  </section>
+
+  <details>
+    <summary>設定</summary>
+    <div class="field">
+      <label for="workMin">作業時間(分)</label>
+      <input id="workMin" type="number" min="1" max="120" step="1" value="20" inputmode="numeric">
+    </div>
+    <div class="field">
+      <label for="breakSec">休憩時間(秒)</label>
+      <input id="breakSec" type="number" min="5" max="300" step="1" value="20" inputmode="numeric">
+    </div>
+    <div class="field">
+      <label for="optSound">音でお知らせする</label>
+      <input id="optSound" type="checkbox" checked>
+    </div>
+    <div class="field">
+      <label for="optVol">音量</label>
+      <input id="optVol" type="range" min="10" max="100" step="10" value="100" style="width:140px;accent-color:var(--accent)">
+    </div>
+    <div class="field">
+      <label for="optVibe" id="vibeLabel">バイブでお知らせする</label>
+      <input id="optVibe" type="checkbox" checked>
+    </div>
+    <div class="field">
+      <label for="optBg">別のアプリを開いていても動かす(通知欄に表示)</label>
+      <input id="optBg" type="checkbox" checked>
+    </div>
+    <p class="note">無音の音声を流してブラウザを眠らせないようにします。通知欄にメディア再生として残り時間が出ますが、音楽などの再生が止まることがあります。</p>
+    <div class="field">
+      <label for="optNotify">通知でお知らせする(別のタブを見ているとき)</label>
+      <input id="optNotify" type="checkbox" checked>
+    </div>
+    <div class="field">
+      <label for="optAuto">休憩のあと、自動で次の作業を始める</label>
+      <input id="optAuto" type="checkbox" checked>
+    </div>
+    <p class="note" id="notifyNote"></p>
+    <button class="btn test" id="testSound" type="button">音とバイブを確認する</button>
+  </details>
+
+  <p class="about">近視を治すためのものではなく、近くを見続けて緊張した目を休めるための習慣です。見え方が気になるときは、眼科で相談してください。</p>
+</main>
+
+<script>
+(function () {
+  var BASE_TITLE = '20-20-20 タイマー';
+  var CIRC = 2 * Math.PI * 96;
+
+  function $(id) { return document.getElementById(id); }
+  var store = {
+    get: function (k, d) { try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+  function todayKey() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  var settings = Object.assign({ workMin: 20, breakSec: 20, sound: true, vol: 1, vibe: true, bg: true, notify: true, autoNext: true }, store.get('ttt.settings', {}));
+  var stats = store.get('ttt.stats', null);
+  if (!stats || stats.date !== todayKey()) stats = { date: todayKey(), count: 0, seconds: 0 };
+
+  var phase = 'work', running = false, endAt = 0, total = 0, remaining = 0;
+
+  function setPhase(p) {
+    phase = p;
+    total = p === 'work' ? settings.workMin * 60000 : settings.breakSec * 1000;
+    remaining = total;
+  }
+
+  function fmt(ms) {
+    var s = Math.max(0, Math.ceil(ms / 1000));
+    return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  }
+  function fmtDuration(sec) {
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return m > 0 ? m + '<small>分</small>' + s + '<small>秒</small>' : s + '<small>秒</small>';
+  }
+
+  /* ---------- sound ---------- */
+  var ac = null;
+  function ensureAudio() {
+    try {
+      if (!ac) { var C = window.AudioContext || window.webkitAudioContext; if (C) ac = new C(); }
+      if (ac && ac.state === 'suspended') ac.resume();
+    } catch (e) {}
+  }
+  function chime(kind, force) {
+    if ((!settings.sound && !force) || !ac) return;
+    try {
+      var t0 = ac.currentTime + 0.02;
+      var notes = kind === 'break' ? [880, 1318.5, 880, 1318.5] : [1046.5, 1046.5, 1046.5];
+      notes.forEach(function (f, i) {
+        var o = ac.createOscillator(), g = ac.createGain(), t = t0 + i * 0.22;
+        o.type = 'triangle'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.9 * settings.vol, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+        o.connect(g); g.connect(ac.destination);
+        o.start(t); o.stop(t + 0.5);
+      });
+    } catch (e) {}
+  }
+
+  /* ---------- vibration (Android Chrome など。iPhoneでは使えません) ---------- */
+  function buzz(kind, force) {
+    if (!settings.vibe && !force) return;
+    try {
+      if (navigator.vibrate) navigator.vibrate(kind === 'break' ? [300, 120, 300, 120, 300] : [200]);
+    } catch (e) {}
+  }
+
+  /* ---------- notification ---------- */
+  function updateNotifyNote() {
+    var msg = '';
+    try {
+      if (!('Notification' in window)) msg = 'このブラウザでは通知を使えません。音とタブの表示でお知らせします。';
+      else if (Notification.permission === 'granted') msg = '通知は有効です。別のタブを見ているときに表示されます。';
+      else if (Notification.permission === 'denied') msg = '通知がブロックされています。音とタブの表示でお知らせします。';
+      else msg = '開始すると、通知の許可を求められることがあります。';
+    } catch (e) { msg = '音とタブの表示でお知らせします。'; }
+    $('notifyNote').textContent = msg;
+  }
+  function askNotify() {
+    try {
+      if (settings.notify && 'Notification' in window && Notification.permission === 'default') {
+        var r = Notification.requestPermission(updateNotifyNote);
+        if (r && r.then) r.then(updateNotifyNote, function () {});
+      }
+    } catch (e) {}
+  }
+  function notify(title, body) {
+    if (!settings.notify || !document.hidden) return;
+    try {
+      if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body: body, tag: 'ttt' });
+    } catch (e) {}
+  }
+
+  /* ---------- ticker (a worker keeps time while the tab is in the background) ---------- */
+  var worker = null, workerFailed = false, timer = null;
+  function ensureWorker() {
+    if (worker || workerFailed) return;
+    try {
+      var src = 'var id=null;onmessage=function(e){if(e.data==="start"){if(!id){id=setInterval(function(){postMessage(1)},250);}}else{clearInterval(id);id=null;}};';
+      worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      worker.onmessage = tick;
+      worker.onerror = function () { workerFailed = true; worker = null; if (running) startTicker(); };
+    } catch (e) { workerFailed = true; worker = null; }
+  }
+  function startTicker() {
+    ensureWorker();
+    if (worker) worker.postMessage('start');
+    else if (!timer) timer = setInterval(tick, 250);
+  }
+  function stopTicker() {
+    if (worker) worker.postMessage('stop');
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+
+  /* ---------- background keep-alive (silent audio + media notification) ---------- */
+  var keep = null, lastMedia = '', mediaReady = false;
+  function silentWav() {
+    var rate = 8000, n = rate * 2, b = new Uint8Array(44 + n), dv = new DataView(b.buffer);
+    function s(o, t) { for (var i = 0; i < t.length; i++) b[o + i] = t.charCodeAt(i); }
+    s(0, 'RIFF'); dv.setUint32(4, 36 + n, true); s(8, 'WAVEfmt '); dv.setUint32(16, 16, true);
+    dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, rate, true);
+    dv.setUint32(28, rate, true); dv.setUint16(32, 1, true); dv.setUint16(34, 8, true);
+    s(36, 'data'); dv.setUint32(40, n, true);
+    for (var i = 0; i < n; i++) b[44 + i] = (i % 400 === 0) ? 129 : 128;
+    return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+  }
+  function setupMedia() {
+    if (mediaReady || !('mediaSession' in navigator)) return;
+    mediaReady = true;
+    try {
+      navigator.mediaSession.setActionHandler('play', function () { if (!running) { run(); } });
+      navigator.mediaSession.setActionHandler('pause', function () { if (running) { pause(); } });
+    } catch (e) {}
+  }
+  function startKeep() {
+    if (!settings.bg) return;
+    try {
+      if (!keep) { keep = new Audio(silentWav()); keep.loop = true; }
+      var p = keep.play(); if (p && p.catch) p.catch(function () {});
+      setupMedia();
+    } catch (e) {}
+  }
+  function stopKeep() {
+    try {
+      if (keep) keep.pause();
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
+    } catch (e) {}
+    lastMedia = '';
+  }
+  function updateMedia() {
+    if (!running || !settings.bg || !keep || !('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
+    var left = phase === 'work' ? '休憩まであと' + Math.ceil(remaining / 60000) + '分' : 'あと' + Math.ceil(remaining / 1000) + '秒';
+    var title = phase === 'work' ? '作業中' : '6m以上先を見よう';
+    var key = title + left;
+    if (key === lastMedia) return;
+    lastMedia = key;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: title, artist: left, album: BASE_TITLE });
+      navigator.mediaSession.playbackState = 'playing';
+    } catch (e) {}
+  }
+
+  /* ---------- engine ---------- */
+  function run() { endAt = Date.now() + remaining; running = true; startTicker(); startKeep(); render(); }
+  function pause() { remaining = Math.max(0, endAt - Date.now()); running = false; stopTicker(); stopKeep(); render(); }
+
+  function addBreak() {
+    if (stats.date !== todayKey()) stats = { date: todayKey(), count: 0, seconds: 0 };
+    stats.count += 1;
+    stats.seconds += settings.breakSec;
+    store.set('ttt.stats', stats);
+  }
+
+  function completePhase() {
+    if (phase === 'work') {
+      setPhase('break');
+      endAt = Date.now() + remaining;
+      chime('break'); buzz('break');
+      notify('遠くを見る時間です', '6m以上先を、' + settings.breakSec + '秒間見ましょう。');
+    } else {
+      addBreak();
+      chime('work'); buzz('work');
+      notify('休憩おわり', '作業に戻れます。');
+      setPhase('work');
+      if (settings.autoNext) endAt = Date.now() + remaining;
+      else { running = false; stopTicker(); stopKeep(); }
+    }
+  }
+
+  function tick() {
+    if (!running) return;
+    remaining = endAt - Date.now();
+    if (remaining <= 0) completePhase();
+    render();
+  }
+
+  /* ---------- view ---------- */
+  function render() {
+    var untouched = remaining >= total;
+    $('app').setAttribute('data-phase', phase);
+    $('timeText').textContent = fmt(remaining);
+    $('ringBar').setAttribute('stroke-dashoffset', String(CIRC * (1 - Math.max(0, Math.min(1, remaining / total)))));
+
+    var label;
+    if (phase === 'work') label = running ? '作業中' : (untouched ? '待機中' : '一時停止中');
+    else label = running ? '遠くを見る時間' : '休憩(一時停止中)';
+    $('phaseLabel').textContent = label;
+    $('subLabel').textContent = phase === 'work' ? '次の休憩まで' : '休憩の残り';
+    $('hintText').textContent = phase === 'work'
+      ? '休憩の時間になったら、お知らせします。'
+      : '6m以上先に目を向けて、ゆっくりまばたきをしましょう。';
+
+    $('mainBtn').textContent = running ? '一時停止' : (untouched ? '開始' : '再開');
+    $('altBtn').textContent = phase === 'work' ? '今すぐ休憩' : '休憩を終える';
+
+    $('statCount').textContent = String(stats.count);
+    $('statTime').innerHTML = fmtDuration(stats.seconds);
+
+    document.title = running
+      ? fmt(remaining) + ' ' + (phase === 'work' ? '作業' : '休憩') + ' | ' + BASE_TITLE
+      : BASE_TITLE;
+    updateMedia();
+  }
+
+  /* ---------- controls ---------- */
+  $('mainBtn').addEventListener('click', function () {
+    ensureAudio(); askNotify();
+    if (running) pause(); else run();
+  });
+  $('altBtn').addEventListener('click', function () {
+    ensureAudio(); askNotify();
+    if (phase === 'work') { setPhase('break'); chime('break'); }
+    else { setPhase('work'); }
+    run();
+  });
+  $('resetBtn').addEventListener('click', function () {
+    running = false; stopTicker(); stopKeep(); setPhase('work'); render();
+  });
+  $('testSound').addEventListener('click', function () { ensureAudio(); chime('break', true); buzz('break', true); });
+
+  function saveSettings() { store.set('ttt.settings', settings); }
+  function readInt(el, min, max, fallback) {
+    var n = parseInt(el.value, 10);
+    if (isNaN(n)) n = fallback;
+    n = Math.max(min, Math.min(max, n));
+    el.value = n;
+    return n;
+  }
+  $('workMin').addEventListener('change', function () {
+    settings.workMin = readInt(this, 1, 120, 20); saveSettings();
+    if (!running && phase === 'work') setPhase('work');
+    render();
+  });
+  $('breakSec').addEventListener('change', function () {
+    settings.breakSec = readInt(this, 5, 300, 20); saveSettings();
+    if (!running && phase === 'break') setPhase('break');
+    render();
+  });
+  $('optSound').addEventListener('change', function () { settings.sound = this.checked; saveSettings(); });
+  $('optVol').addEventListener('change', function () { settings.vol = (+this.value) / 100; saveSettings(); ensureAudio(); chime('work', true); });
+  $('optVibe').addEventListener('change', function () { settings.vibe = this.checked; saveSettings(); if (this.checked) buzz('work', true); });
+  $('optBg').addEventListener('change', function () {
+    settings.bg = this.checked; saveSettings();
+    if (!this.checked) stopKeep(); else if (running) startKeep();
+  });
+  $('optNotify').addEventListener('change', function () { settings.notify = this.checked; saveSettings(); if (this.checked) askNotify(); updateNotifyNote(); });
+  $('optAuto').addEventListener('change', function () { settings.autoNext = this.checked; saveSettings(); });
+
+  document.addEventListener('visibilitychange', function () { tick(); render(); });
+
+  $('workMin').value = settings.workMin;
+  $('breakSec').value = settings.breakSec;
+  $('optSound').checked = settings.sound;
+  $('optVol').value = Math.round(settings.vol * 100);
+  $('optVibe').checked = settings.vibe;
+  $('optBg').checked = settings.bg;
+  if (!navigator.vibrate) { $('optVibe').disabled = true; $('vibeLabel').textContent = 'バイブでお知らせする(この端末・ブラウザでは使えません)'; }
+  $('optNotify').checked = settings.notify;
+  $('optAuto').checked = settings.autoNext;
+  updateNotifyNote();
+  setPhase('work');
+  render();
+})();
+</script>
+</body>
+</html>
